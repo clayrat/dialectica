@@ -606,18 +606,12 @@ Theorem ip_generalized (s t : Inhabited) (p : s -> prp) (q : t -> prp) :
 Proof.
 rewrite /valid /= => TW TC.
 pose u := fun (x : s) => W_member (p x).
-pose v := fun (y : t) (w : W (q y)) => C_member (q y).
+pose v := fun (y : t) (_ : W (q y)) => C_member (q y).
 exists (fun a => existT _ (projT1 (a.1 u)) (fun _ => projT2 (a.1 u),
-                                            fun b => a.2 (u, v)),
+                                            fun b => a.2 (u,v)),
         fun _ => (u,v))=>/=.
-move=>[[f g] h] /=.
-pose y := projT1 (f u).
-pose z := projT1 (g (u, v)).
-move=>G H.
-rewrite (TC y (h y (fun=> projT2 (f u), fun=> g (u, v))).2) /=.
-rewrite (TC y (v y (projT2 (f u)))) /= in G.
-apply: G.
-by rewrite (TW z ((h y (fun=> projT2 (f u), fun=> g (u, v))).1 z)) /= in H.
+move=>[[??] h] /=.
+by rewrite (TC _ (h _ _).2) (TW _ ((h _ _).1 _)).
 Qed.
 
 (** A special case of our IP occurs when [p] is a primitive propositional function. *)
