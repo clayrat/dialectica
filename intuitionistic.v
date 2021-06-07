@@ -155,7 +155,10 @@ Fixpoint dia (p : prp) : W p -> C p -> Prop :=
   end.
 
 (** The [dia] relation is decidable. This fact is used only in the adjunction between
-    conjunction and implication. *)
+    conjunction and implication.
+
+    (Actually, it's also used for the validity of induction).
+*)
 
 Fixpoint diab (p : prp) : W p -> C p -> bool :=
   match p return W p -> C p -> bool with
