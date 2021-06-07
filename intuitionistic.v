@@ -278,8 +278,8 @@ exists (fun x => match x with inl t => inl t | inr u => inr (a u) end,
                    | inl i => (y.2.1, b (W_member p, y.2.2))
                    | inr j => (y.2.1, b (j         , y.2.2))
                  end)=>/=.
-case; case=>w [? e] //= G.
-by apply: (H (w,e)).
+case; case=>?[??] //= ?.
+by apply: (H (_,_)).
 Qed.
 
 (** The next two theorems verify the adjunction between conjunction and implication. This is
@@ -294,9 +294,9 @@ exists (fun x => (a x.1).1 x.2,
           if diab wq ((a wp).2 (wq, cr))
           then inl (b (wp, (wq, cr)))
           else inr ((a wp).2 (wq, cr)))=>/=.
-move=>[[c d]e].
-case: (diaP d ((a c).2 (d, e)))=>//= ??.
-by apply: (H (c,(d,e))).
+move=>[[??]?].
+case: (diaP _ ((a _).2 _))=>//= ??.
+by apply: (H (_,(_,_))).
 Qed.
 
 Theorem impl_conj_adjunct2 (p q r : prp) : valid (p and q ==>> r) -> valid (p ==>> (q ==>> r)).
@@ -311,8 +311,8 @@ exists (fun x => (fun u => a (x, u),
                    | inl c => c
                    | inr d => C_member p
                  end)=>/=.
-move=>[u [v w]] /= F G.
-apply: (H (u, v, w))=>/=; move: F G.
+move=>[?[??]] /= F G.
+apply: (H (_,_,_))=>/=; move: F G.
 by case: (b _).
 Qed.
 
@@ -330,8 +330,9 @@ rewrite /valid /= =>H.
 exists (fun u x => (projT1 (H x)).1 u,
         fun (y : W p * {x : ty & C (q x)}) =>
           (projT1 (H (projT1 y.2))).2 (y.1, projT2 y.2)).
-case=>u [x v]=>/= ?.
-by apply: (projT2 (H x) (u, v)).
+move=>[?[??]] /= H0.
+case: H H0=>/= ? H.
+by apply: H (_,_).
 Qed.
 
 Theorem forall_elim {ty : Inhabited} (a : ty) (p : ty -> prp) :
@@ -356,8 +357,9 @@ Proof.
 rewrite /valid /= => H.
 exists (fun (u : {x : ty & W (p x)}) => (projT1 (H (projT1 u))).1 (projT2 u),
         fun v x w => (projT1 (H x)).2 (w, v.2)).
-move=>[[x u] v] /= ?.
-by apply: (projT2 (H x) (u, v)).
+move=>[[??]?] /= H0.
+case: H H0=>/= ? H.
+by apply: H (_,_).
 Qed.
 
 (** * Equality
@@ -469,7 +471,7 @@ Proof.
 move=>z s b c; elim: m c; first by move=>?; left.
 move=>m IH c.
 pose w := nat_rect _ z s m.
-case: (diaP w (b m (w, c)))=>_.
+case: (diaP w (b m (w,c)))=>_.
 - by right; exists m.
 by apply/IH/b.
 Defined.
@@ -486,7 +488,7 @@ exists (fun x => nat_rect _ x.1 (fun k => (x.2 k).1) m,
                    (fun k => (y.1.2 k).2)
                    y.2)=>/=.
 move=>[[??] c] /=.
-elim: m c=>//; rewrite /search=>/= ? IH ?.
+elim: m c=>//; rewrite /search /= =>? IH ?.
 case: diaP=>/= [D1|D2] H.
 - by apply/H/D1.
 by exfalso; apply/D2/IH/H.
@@ -541,16 +543,16 @@ Lemma implication_trivial_W (p q : prp) :
 Proof.
 move=>E TCp TWq; rewrite /trivial_W /singleton /W_member /=; case=>f g.
 rewrite (E _ TWq _ f) (E _ TCp _ g) /=.
-by rewrite (surjective_pairing (WC_member p)) (surjective_pairing (WC_member q)).
+by rewrite 2![WC_member _]surjective_pairing.
 Qed.
 
 (** Triviality of [C (p ==> q)] does not require any extra assumptions. *)
 Lemma implication_trivial_C (p q : prp) :
   trivial_W p -> trivial_C q -> trivial_C (p ==>> q).
 Proof.
-move=>TWp TCq; rewrite /trivial_C /C_member /=; move=>[wp cq] /=.
+move=>TWp TCq; rewrite /trivial_C /C_member /=; case=>wp cq /=.
 rewrite (TWp wp) (TCq cq) /=.
-by rewrite (surjective_pairing (WC_member p)) (surjective_pairing (WC_member q)).
+by rewrite 2![WC_member _]surjective_pairing.
 Qed.
 
 (** ** Markov principle *)
