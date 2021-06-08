@@ -84,9 +84,9 @@ Notation "'some' x : t , p" :=  (@existential t (fun x => p)) (at level 80, x at
 
 Fixpoint W (p : prp) : Set :=
   match p with
-     | primitive p => unit
-     | conjunction p1 p2 => (W p1) * (W p2)
-     | disjunction p1 p2 => (W p1) + (W p2)
+     | primitive _ => unit
+     | conjunction p1 p2 => W p1 * W p2
+     | disjunction p1 p2 => W p1 + W p2
      | implication p1 p2 => (W p1 -> W p2) * (W p1 * C p2 -> C p1)
      | negation p' => W p' -> C p'
      | universal ty p' => forall x : ty, W (p' x)
@@ -95,10 +95,10 @@ Fixpoint W (p : prp) : Set :=
 
 with C p : Set :=
   match p with
-     | primitive p => unit
-     | conjunction p1 p2 => (C p1) + (C p2)
-     | disjunction p1 p2 => (C p1) * (C p2)
-     | implication p1 p2 => (W p1) * (C p2)
+     | primitive _ => unit
+     | conjunction p1 p2 => C p1 + C p2
+     | disjunction p1 p2 => C p1 * C p2
+     | implication p1 p2 => W p1 * C p2
      | negation p' => W p'
      | universal ty p' => { x : ty & C (p' x) }
      | existential ty p' => forall x : ty, W (p' x) -> C (p' x)
@@ -197,9 +197,7 @@ Qed.
 (** Of course, a decidable proposition is stable for double negation. *)
 
 Lemma dia_not_not_stable (p : prp) (w : W p) (c : C p) : ~ ~ dia w c -> dia w c.
-Proof.
-by move/classicP=>H; apply/diaP/H => /diaP.
-Qed.
+Proof. by move/classicP=>H; apply/diaP/H =>/diaP. Qed.
 
 (** The predicate [valid p] is the Dialectica interpretation of [p]. It says that there is
     [w] such that [dia p w c] holds for any [c]. In terms of games semantics this means
