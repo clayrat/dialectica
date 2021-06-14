@@ -1,2 +1,5 @@
 -R . Dialectica
 intuitionistic.v
+linear.v
+Rlist.v
+linear_rl.v

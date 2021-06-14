@@ -1,10 +1,13 @@
 From Coq Require Import ssreflect ssrbool ssrfun Eqdep_dec FunctionalExtensionality.
-From mathcomp Require Import ssrnat eqtype.
+From mathcomp Require Import ssrnat eqtype seq.
+From Dialectica Require Import Rlist.
 
 Set Bullet Behavior "None".
 Set Implicit Arguments.
 Unset Strict Implicit.
 Unset Printing Implicit Defensive.
+
+Open Scope seq_scope.
 
 (** * Basic definitions *)
 
@@ -24,7 +27,7 @@ Definition N := inhabit 0.
 
    Our embedding allows us to express "exotic" propositional functions [p : ty -> prp] in
    which the logical structure of [p x] may depend on [x]. Because of this phenomenon we
-   will be forced later on to introduce certain type dependencies where there are none in
+   will be forced later on to introduce certain type dependencies where there are none in:
    the usual Dialectica interpretation. *)
 
 Inductive prp : Type :=
@@ -49,6 +52,7 @@ Notation "x ＆ y" := (wth x y) (at level 74, left associativity).
 Notation "x ⊕ y" := (pls x y) (at level 76, left associativity).
 Notation "x ⊗ y" := (tns x y) (at level 76, left associativity).
 Notation "x ⊸ y" := (arr x y) (at level 78, right associativity).
+Notation "x ⇒ y" := (arr (bng x) y) (at level 78, right associativity).
 Notation "! x" := (bng x) (at level 1, format "! x").
 Notation "? x" := (whn x) (at level 1, format "? x").
 Notation "∀ x : t , p" :=  (@unv t (fun x => p)) (at level 80, x at level 99).
@@ -79,14 +83,11 @@ Notation "∃ x : t , p" :=  (@ext t (fun x => p)) (at level 80, x at level 99).
    Indeed, we are going to investigate it in a separate file. For now we are just trying
    to faithfully represent the Dialectica interpretation. *)
 
-Section LinDia.
-
-Variable ctx : Type.
-Variable daimon : ctx.
+Inductive ctx := ctx_intro of list ctx.
 
 Fixpoint W (p : prp) : Type :=
   match p with
-    | atm _ => unit
+    | atm p => unit
     | pls p1 p2 => W p1 + W p2
     | tns p1 p2 => W p1 * W p2
     | bng p => W p
@@ -96,41 +97,65 @@ Fixpoint W (p : prp) : Type :=
 
 with C p :=
   match p with
-    | atm _ => ctx
+    | atm p => ctx
     | pls p1 p2 => C p1 * C p2
     | tns p1 p2 => (W p1 -> C p2) * (W p2 -> C p1)
-    | bng p => W p -> C p
+    | bng p => Rlist.t (W p) (C p)
     | opp p => W p
     | unv ty p' => { x : ty & C (p' x) }
   end.
 
-(** The types [W] and [C] are always inhabited because we restrict quantifiers to inhabited
-   types. *)
-
-Definition WC_member (A : prp) : W A * C A.
-Proof.
-elim: A=>//=. (* atm case needs the daimon *)
-- by move=>?[??]?[??]; do!split=>//; right.
-- by move=>?[??]?[??].
-- by move=>?[??].
-- by move=>?[??].
-move=>ty ? H; split.
-- by move=>x; case: (H x).
-- by exists (member ty); case: (H (member ty)).
-Defined.
-
-Definition W_member (A : prp) := (WC_member A).1.
-Definition C_member (A : prp) := (WC_member A).2.
-
 Notation "⊢ A" := (W A) (at level 89).
 Notation "⊣ A" := (C A) (at level 89).
 
-(** The relation [rel p w c] is what is usually written as [p_D] in the Dialectica
-    interpretation, i.e., the matrix of the interpreted formula.
+Fixpoint run {A : prp} : W A -> C A -> ctx.
+Proof.
+case: A=>//=.
+- by move=>A B; case=>?[??]; [apply: (run A)|apply: (run B)].
+- move=>??[u v][? hr].
+  by apply: (run _ u (hr v)).
+- by move=>? u z; apply/ctx_intro/(seq.map (run _ u))/(Rlist.run z u).
+- by move=>A ??; apply: (run A).
+by move=>? p ?[t ?]; apply: (run (p t)).
+Defined.
 
-    In terms of games, [rel p w c] tells whether the player move [w] wins against the
-    opponent move [c] in the game determined by the proposition [p].
+(** The relation [rel p w c] is what is usually written as [p_D] in the Dialectica
+   interpretation, i.e., the matrix of the interpreted formula.
+
+   In terms of games, [rel p w c] tells whether the player move [w] wins against the
+   opponent move [c] in the game determined by the proposition [p].
 *)
+
+Definition rel_bng {A} (R : forall x, W x -> C x -> Prop) (u : W A) (z : Rlist (W A) (C A)) :=
+  Rlist.fold_right (fun x P u => R A u x /\ P u) (fun _ => True) z u.
+
+Definition rel_bng_node {A} (R : forall x, W x -> C x -> Prop) (u : W A) (z : Rnode (W A) (C A)) :=
+  Rlist.fold_right_node (fun x P u => R A u x /\ P u) (fun _ => True) z u.
+
+Lemma rel_bng_simpl {A R} : forall (u : W A) (z : W A -> Rnode (W A) (C A)),
+  rel_bng R u (Rlist.rnode z) = @rel_bng_node A R u (z u).
+Proof. by []. Qed.
+
+Lemma rel_bng_nil {A R}: forall (u : W A),
+  rel_bng_node R u rnil = True.
+Proof. by []. Qed.
+
+Lemma rel_bng_cons {A R} : forall (u : W A) (x : C A) (z : Rlist (W A) (C A)),
+  rel_bng_node R u (Rlist.rcons x z) = (R A u x /\ rel_bng R u z).
+Proof. by []. Qed.
+
+Lemma rel_bng_app {A R} : forall (u : W A) (zl zr : Rlist (W A) (C A)),
+  rel_bng R u (Rlist.app zl zr) <-> rel_bng R u zl /\ rel_bng R u zr
+with rel_bng_app_node {A R} : forall (u : W A) (nl : Rnode (W A) (C A)) (zr : Rlist (W A) (C A)),
+  rel_bng_node R u (Rlist.app_node nl zr u) <-> rel_bng_node R u nl /\ rel_bng R u zr.
+Proof.
+- move=>/= ?[?]?.
+  by rewrite !rel_bng_simpl; exact: rel_bng_app_node.
+move=>u; case=>/=.
+- by case=>r; rewrite rel_bng_nil rel_bng_simpl; split=>// [[]].
+move=>???; rewrite !rel_bng_cons rel_bng_app.
+by apply: iff_sym; exact: and_assoc.
+Qed.
 
 Fixpoint rel (A : prp) : W A -> C A -> Prop :=
   match A return W A -> C A -> Prop with
@@ -142,8 +167,8 @@ Fixpoint rel (A : prp) : W A -> C A -> Prop :=
     | tns A B => fun w z => match w, z with
                  | (u, v), (zl, zr) => rel u (zr v) /\ rel v (zl u)
                  end
-    | bng A => fun u y => @rel A u (y u)
-    | opp A => fun x u => ~ rel u x
+    | bng A => @rel_bng A rel
+    | opp A => (fun x u => ~ rel u x)
     | unv T A => fun w z => match z with
                  | existT t u => rel (w t) u
                  end
@@ -151,6 +176,24 @@ Fixpoint rel (A : prp) : W A -> C A -> Prop :=
 
 (** The [rel] relation is decidable. This fact is used only in the adjunction between
    conjunction and implication. *)
+
+Definition relb_bng {A} (R : forall x, W x -> C x -> bool) (u : W A) (z : Rlist (W A) (C A)) :=
+  Rlist.fold_right (fun x P u => R A u x && P u) (fun _ => true) z u.
+
+Definition relb_bng_node {A} (R : forall x, W x -> C x -> bool) (u : W A) (z : Rnode (W A) (C A)) :=
+  Rlist.fold_right_node (fun x P u => R A u x && P u) (fun _ => true) z u.
+
+Lemma relb_bng_simpl {A R} : forall (u : W A) (z : W A -> Rnode (W A) (C A)),
+  relb_bng R u (Rlist.rnode z) = @relb_bng_node A R u (z u).
+Proof. by []. Qed.
+
+Lemma relb_bng_nil {A R}: forall (u : W A),
+  relb_bng_node R u rnil = true.
+Proof. by []. Qed.
+
+Lemma relb_bng_cons {A R} : forall (u : W A) (x : C A) (z : Rlist (W A) (C A)),
+  relb_bng_node R u (Rlist.rcons x z) = R A u x && relb_bng R u z.
+Proof. by []. Qed.
 
 Fixpoint relb (A : prp) : W A -> C A -> bool :=
   match A return W A -> C A -> bool with
@@ -162,20 +205,37 @@ Fixpoint relb (A : prp) : W A -> C A -> bool :=
     | tns A B => fun w z => match w, z with
                  | (u, v), (zl, zr) => relb u (zr v) && relb v (zl u)
                  end
-    | bng A => fun u y => @relb A u (y u)
+    | bng A => @relb_bng A relb
     | opp A => fun x u => ~~ relb u x
     | unv T A => fun w z => match z with
                  | existT t u => relb (w t) u
                  end
   end.
 
+Lemma relbngP (p : prp) (a : W p) (b : Rlist (W p) (C p)) :
+  (forall c : C p, reflect (rel a c) (relb a c)) -> reflect (rel_bng rel a b) (relb_bng relb a b)
+with relbngnodeP (p : prp) (a : W p) (b : Rnode (W p) (C p)) :
+  (forall c : C p, reflect (rel a c) (relb a c)) -> reflect (rel_bng_node rel a b) (relb_bng_node relb a b).
+Proof.
+- move=>?; case: b=>?; rewrite rel_bng_simpl relb_bng_simpl.
+  by apply: relbngnodeP.
+move=>H; case: b.
+- by rewrite rel_bng_nil relb_bng_nil; exact: ReflectT.
+move=>??.
+rewrite rel_bng_cons relb_bng_cons.
+case: relbngP=>//; last by rewrite andbC /= =>?; apply: ReflectF; case.
+move=>?; case: H=>/= ?; last by apply: ReflectF; case.
+by apply: ReflectT.
+Qed.
+
 Theorem relP (p : prp) (a : W p) (b : C p) : reflect (rel a b) (relb a b).
 Proof.
-elim: p a b=>//=.
+elim: p a b=>/=.
 - by move=>? _ _; exact: idP.
 - by move=>? H1 ? H2; case=>??; [exact: H1|exact: H2].
 - move=>? H1 ? H2 [??][??] /=; case: H1=>/=; last by move=>?; apply: ReflectF; case.
   by case: H2=>??; [apply: ReflectT | apply: ReflectF; case].
+- by move=>????; apply: relbngP.
 - by move=>? H ??; case: H=>/= ?; [apply: ReflectF|apply: ReflectT].
 by move=>?? H ?[??] /=; apply: H.
 Qed.
@@ -184,6 +244,13 @@ Qed.
 
 Lemma rel_not_not (A : prp) (u : W A) (x : C A) : ~ ~ rel u x -> rel u x.
 Proof. by move/classicP=>H; apply/relP/H => /relP. Qed.
+
+Lemma rel_bng_not_not (A : prp) (u : W A) (v : Rlist (W A) (C A)) : ~ ~ rel_bng rel u v -> rel_bng rel u v.
+Proof.
+pose R:=relP u.
+move/classicP=>H.
+by apply: relbngP=>//; apply: H=>/relbngP; apply.
+Qed.
 
 Lemma rel_arr : forall A B (w : W (A ⊸ B)) (z : C (A ⊸ B)),
   (rel w z) <-> (rel z.1 (w.2 z.2) -> rel (w.1 z.1) z.2).
@@ -273,6 +340,22 @@ split=>/= [[[[u ?]?][hl ?]]] /=.
 by case: (hl u)=>??[[[??]?]]; apply.
 Qed.
 
+Definition tns_comm {X Y} : ⊢ X ⊗ Y ⊸ Y ⊗ X.
+Proof. by split=>/=; case. Defined.
+
+Lemma Valid_tns_comm {X Y}: Valid (@tns_comm X Y).
+Proof. by split=>/=[[[??][??]]][[??]]; apply. Qed.
+
+Definition idl {X} : ⊢ [true] ⊗ X ⊸ X.
+Proof.
+split=>/=; first by case.
+move=>?; split=>//.
+by move=>_; exact: (ctx_intro [::]).
+Defined.
+
+Lemma Valid_idl {A}: Valid (@idl A).
+Proof. by split=>/=[[[[]??]]][[]]. Qed.
+
 (** *)
 
 Definition lam {X Y Z}: ⊢ X ⊗ Y ⊸ Z -> ⊢ X ⊸ Y ⊸ Z.
@@ -348,176 +431,279 @@ Proof. by split=>/=[[[??]?]][]. Qed.
 
 (** Exponentials *)
 
-Definition wth_tns {X Y} : ⊢ !(X ＆ Y) ⊸ !X ⊗ !Y.
-Proof.
-split=>//= [[hl hr][u v]].
-move: (hl u v)=>l; move: (hr v u)=>r.
-by case: (relP v l)=>?; [left|right].
-Defined.
-
-Lemma Valid_wth_tns {X Y} : Valid (@wth_tns X Y).
-Proof.
-split=>/=[[[??][??]]] /=.
-case: relP=>?[H1 H2]; apply: H1=>? //.
-by apply: H2.
-Qed.
-
-Definition tns_wth {X Y} : ⊢ !X ⊗ !Y ⊸ !(X ＆ Y).
-Proof.
-split=>//= f; split=>u v.
-- by case: (f (u,v))=>// ?; apply: C_member.
-by case: (f (v,u))=>// ?; apply: C_member.
-Defined.
-
-Lemma Valid_tns_wth {X Y} : Valid (@tns_wth X Y).
-Proof.
-split=>/=[[[??]z]] /=.
-by case: z; rewrite -/W -/C=>?[[??]]; apply; apply.
-Qed.
-
 Definition bng_fun {X Y}: ⊢ X ⊸ Y -> ⊢ !X ⊸ !Y.
 Proof.
 move=>/=[fl fr]; split=>//.
-by move=>h ?; apply/fr/h/fl.
+by move=>?; apply/(Rlist.set fl)/(Rlist.map fr).
 Defined.
+
+Lemma rel_set_map {X Y} (fl : W X -> W Y) (fr : C Y -> C X) (u : W X) (g : Rlist (W Y) (C Y)) :
+  (forall c : C (X ⊸ Y), @rel (X ⊸ Y) (fl, fr) c) ->
+  rel_bng rel u (set fl (map fr g)) ->
+  rel_bng rel (fl u) g
+with relnode_set_map {X Y} (fl : W X -> W Y) (fr : C Y -> C X) (u : W X) (g : Rnode (W Y) (C Y)) :
+  (forall c : C (X ⊸ Y), @rel (X ⊸ Y) (fl, fr) c) ->
+  rel_bng_node rel u (set_node fl (map_node fr g)) ->
+  rel_bng_node rel (fl u) g.
+Proof.
+- move=>?; case: g =>?/=; rewrite !rel_bng_simpl.
+  by exact: relnode_set_map.
+move=>H; case: g=>/=; first by rewrite !rel_bng_nil.
+move=>x ?; rewrite !rel_bng_cons =>[[??]]; split.
+- apply: rel_not_not=>?.
+  by move: (H (u,x))=>/=; apply.
+by apply: rel_set_map.
+Qed.
 
 Lemma Valid_bng_fun {X Y} : forall (f : ⊢ X ⊸ Y),
   Valid f -> Valid (bng_fun f).
 Proof.
-move=>/=[fl fr][Hf]; split=>/= [[u g]].
-by move: (Hf (u,g (fl u))).
+move=>/=[??][?]; split=>/= [[??]][?]; apply.
+by apply: rel_set_map.
 Qed.
 
 Lemma compose_bng_fun {X Y Z} : forall (f : ⊢ X ⊸ Y) (g : ⊢ Y ⊸ Z),
   bng_fun (f; g) = bng_fun f; bng_fun g.
-Proof. by move=>/=[??][??]. Qed.
+Proof.
+move=>/=[??][??]/=; rewrite pair_equal_spec; split=>//.
+by apply: functional_extensionality=>?; rewrite map_set set_set map_map.
+Qed.
 
 Lemma id_bng_fun {X}: bng_fun (@identity X) = identity.
-Proof. by []. Qed.
+Proof.
+rewrite /identity /= pair_equal_spec; split=>//.
+by apply: functional_extensionality=>?; rewrite map_id set_id.
+Qed.
 
-Definition bng_mon {X Y}: ⊢ !X ⊗ !Y ⊸ !(X ⊗ Y).
+Definition bng_mon {X Y} : ⊢ !X ⊗ !Y ⊸ !(X ⊗ Y).
 Proof.
 split=>//= z; split.
-- by move=>??; case: z=>// +?; apply.
-by move=>??; case: z=>// ?; apply.
+- move=>u.
+  apply: (set (fun v => (u,v))).
+  apply: (map (fun '(fl,_) => fl u)).
+  by exact: z.
+move=>v.
+apply: (set (fun u => (u,v))).
+apply: (map (fun '(_,fr) => fr v)).
+by exact: z.
 Defined.
 
-Lemma Valid_bng_mon {X Y}: Valid (@bng_mon X Y).
-Proof. by split=>/=[[[u v] y]]; case: (y (u,v))=>?? []. Qed.
+Lemma rel_set_map_pair {X Y} (u : W X) (v : W Y) (z : Rlist (W X * W Y) ((W X -> C Y) * (W Y -> C X))) :
+  rel_bng rel v (set (fun v => (u,v)) (map (fun '(fl, _) => fl u) z)) ->
+  rel_bng rel u (set (fun u => (u,v)) (map (fun '(_, fr) => fr v) z)) ->
+  @rel_bng (X ⊗ Y) rel (u,v) z
+with relnode_set_map_pair {X Y} (u : W X) (v : W Y) (z : Rnode (W X * W Y) ((W X -> C Y) * (W Y -> C X))) :
+  rel_bng_node rel v (set_node (fun v => (u,v)) (map_node (fun '(fl, _) => fl u) z)) ->
+  rel_bng_node rel u (set_node (fun u => (u,v)) (map_node (fun '(_, fr) => fr v) z)) ->
+  @rel_bng_node (X ⊗ Y) rel (u,v) z.
+Proof.
+- case: z=>? /=; rewrite !rel_bng_simpl.
+  by apply: relnode_set_map_pair.
+case: z=>/=; first by rewrite !rel_bng_nil.
+move=>[??]?; rewrite !rel_bng_cons=>[[??][??]]; split=>//=.
+by apply: rel_set_map_pair.
+Qed.
+
+Lemma Valid_bng_mon {X Y} : Valid (@bng_mon X Y).
+Proof.
+split=>/=[[[??]?]][[??]]; apply.
+by apply: rel_set_map_pair.
+Qed.
 
 Lemma natural_bng_mon {P Q R S}: forall (f : ⊢ P ⊸ R) (g : ⊢ Q ⊸ S),
   tns_fun (bng_fun f) (bng_fun g); bng_mon = bng_mon; bng_fun (tns_fun f g).
 Proof.
-move=>/=[fl fr][gl gr]/=; f_equal.
-apply: functional_extensionality=>y; f_equal.
-- apply: functional_extensionality=>u; apply: functional_extensionality=>v.
-  by case: (y (fl u, gl v)).
-apply: functional_extensionality=>v; apply: functional_extensionality=>u.
-by case: (y (fl u, gl v)).
+move=>/=[??][??]/=; rewrite pair_equal_spec; split=>//.
+apply: functional_extensionality=>?; rewrite pair_equal_spec.
+by split;
+(apply: functional_extensionality=>?;
+ rewrite !map_set !set_set !map_map;
+ do!f_equal; apply: functional_extensionality; case).
 Qed.
 
-Definition der {X}: ⊢ !X ⊸ X.
-Proof. by split=>/=. Defined.
+Definition bng_true : ⊢ [true] ⊸ ![true].
+Proof.
+split=>//= z.
+by apply/ctx_intro/(Rlist.run z tt).
+Defined.
 
-Lemma Valid_der {X}: Valid (@der X).
-Proof. by split=>/=[[??]][]. Qed.
+Lemma rel_tt (l : Rlist unit ctx): @rel_bng [true] rel tt l
+with relnode_tt (n : Rnode unit ctx): @rel_bng_node [true] rel tt n.
+Proof.
+- case: l=>?; rewrite !rel_bng_simpl.
+  by apply: relnode_tt.
+case: n=>/=; first by rewrite !rel_bng_nil.
+by move=>??; rewrite rel_bng_cons.
+Qed.
+
+Lemma Valid_bng_true : Valid bng_true.
+Proof.
+split=>/=[[[]?]][_]; apply.
+by exact: rel_tt.
+Qed.
+
+Definition der {X} : ⊢ !X ⊸ X.
+Proof.
+split=>//= x.
+by exact: (rnode (fun _ => rcons x nil)).
+Defined.
+
+Lemma Valid_der {X} : Valid (@der X).
+Proof.
+split=>/= [[??]][].
+by rewrite rel_bng_simpl rel_bng_cons; case.
+Qed.
 
 Lemma natural_der {X Y}: forall (f : ⊢ X ⊸ Y),
   der; f = bng_fun f; der.
-Proof. by move=>/=[??]. Qed.
+Proof. by move=>/=[]. Qed.
 
 Definition dig {X} : ⊢ !X ⊸ !!X.
+Proof. by split=>//= ?; apply: concat. Defined.
+
+Lemma rel_concat {X} (u : W X) (v : Rlist (W X) (Rlist (W X) (C X))) :
+ rel_bng rel u (concat v) -> @rel_bng !X rel u v
+with relnode_concat {X} (u : W X) (v : Rnode (W X) (Rlist (W X) (C X))) :
+ rel_bng_node rel u (concat_node v u) -> @rel_bng_node !X rel u v.
 Proof.
-split=>//=.
-by move=>x ?; apply: x.
-Defined.
+- case: v=>?/=; rewrite !rel_bng_simpl.
+  by exact: relnode_concat.
+case: v=>/=; first by rewrite !rel_bng_nil.
+move=>[n]z/=; rewrite rel_bng_cons /= rel_bng_simpl.
+case: (n u)=>/=.
+- rewrite rel_bng_nil=>H; split=>//.
+  case: z H=>? /=; rewrite rel_bng_simpl.
+  by exact: relnode_concat.
+move=>??; rewrite !rel_bng_cons=>[[?]] /rel_bng_app [??]; do!split=>//.
+by apply: rel_concat.
+Qed.
 
 Lemma Valid_dig {X} : Valid (@dig X).
-Proof. by split=>/=[[??]][]. Qed.
+Proof.
+split=>/=[[??]][?]; apply.
+by apply: rel_concat.
+Qed.
 
 Lemma natural_dig {X Y}: forall (f : ⊢ X ⊸ Y),
   dig; bng_fun (bng_fun f) = bng_fun f; dig.
-Proof. by move=>/=[??]. Qed.
+Proof.
+move=>/=[??]/=; rewrite pair_equal_spec; split=>//.
+apply: functional_extensionality=>?.
+by rewrite map_concat set_concat -map_map.
+Qed.
 
 Lemma dig_der_id_1 {X}: @dig X; der = identity.
-Proof. by []. Qed.
+Proof.
+rewrite /= pair_equal_spec; split=>//.
+apply: functional_extensionality=>[[?]] /=.
+by under eq_rnode=>? do rewrite app_id_r_node.
+Qed.
+
+Lemma concat_singl {X} (u : Rlist (W X) (C X)) :
+  concat (map (fun x => rnode (fun => rcons x nil)) u) = u
+with concat_singl_node {X} (v : Rnode (W X) (C X)) (u : W X) :
+  concat_node (map_node (fun x => rnode (fun => rcons x nil)) v) u = v.
+Proof.
+- case: u=>? /=.
+  by under eq_rnode=>? do rewrite concat_singl_node.
+case: v=>//= ? r /=; rewrite concat_singl.
+by case: r.
+Qed.
 
 Lemma dig_der_id_2 {X}: @dig X; bng_fun der = identity.
-Proof. by []. Qed.
+Proof.
+rewrite /= pair_equal_spec; split=>//.
+apply: functional_extensionality=>l.
+by rewrite set_id; apply: concat_singl.
+Qed.
 
 Lemma dig_assoc {X}: @dig X; dig = dig; bng_fun dig.
-Proof. by []. Qed.
+Proof.
+rewrite /= pair_equal_spec; split=>//.
+apply: functional_extensionality=>?.
+by rewrite set_id concat_map.
+Qed.
 
 Lemma der_mon {X Y}: @bng_mon X Y; der = tns_fun der der.
-Proof. by move=>/=; f_equal; apply: functional_extensionality; case. Qed.
+Proof.
+rewrite /= pair_equal_spec; split;
+by apply: functional_extensionality=>[[]].
+Qed.
 
 Lemma dig_mon {X Y}: @bng_mon X Y; dig = tns_fun dig dig; bng_mon; bng_fun bng_mon.
-Proof. by move=>/=; f_equal; apply: functional_extensionality; case. Qed.
+Proof.
+rewrite /= pair_equal_spec; split; first by apply: functional_extensionality=>[[]].
+apply: functional_extensionality=>?; rewrite pair_equal_spec; split;
+by apply: functional_extensionality=>?; rewrite map_concat set_concat map_set !map_map set_id.
+Qed.
+
+Definition wkn {X} : ⊢ !X ⊸ [true].
+Proof.
+split=>//=.
+move=>?; exact: nil.
+Defined.
+
+Lemma Valid_wkn {X} : Valid (@wkn X).
+Proof. by split=>/= [[??]][]. Qed.
+
+Lemma natural_wkn {X Y}: forall (f : ⊢ X ⊸ Y), bng_fun f; (@wkn Y) = wkn.
+Proof. by move=>/=[]. Qed.
 
 Definition dup {X} : ⊢ !X ⊸ !X ⊗ !X.
 Proof.
-split=>//= [[hl hr]] u.
-move: (hl u u)=>l; move: (hr u u)=>r.
-case: (relP u l)=>?; [|exact l].
-case: (relP u r)=>?; [|exact r].
-apply: C_member.
+split=>//= [[xl xr]].
+by exact: (Rlist.app (collapse xl) (collapse xr)).
 Defined.
 
 Lemma Valid_dup {X} : Valid (@dup X).
 Proof.
-split=>/=[[u[hl hr]]].
-case: relP.
-- by case: relP=>??[?]; apply.
-by move=>?[?].
+split=>/=[[u [xl xr]]][]; rewrite /collapse rel_bng_simpl.
+case: (xl u)=>? /=.
+rewrite rel_bng_simpl=>/rel_bng_app_node [?]; rewrite rel_bng_simpl.
+by case: (xr u)=>??; apply.
 Qed.
 
-Lemma dup_coalg {X}: @dig X; bng_fun dup = dup; tns_fun dig dig; bng_mon.
+Lemma natural_dup {X Y}: forall (f : ⊢ X ⊸ Y),
+  bng_fun f; dup = dup; tns_fun (bng_fun f) (bng_fun f).
 Proof.
-move=>/=; f_equal.
-apply: functional_extensionality=>h; apply functional_extensionality=>u.
-by case: (h (u,u)).
+move=>/=[fl fr]/=; rewrite pair_equal_spec; split=>//.
+apply: functional_extensionality=>[[xl xr]] /=; apply: eq_rnode=>r.
+rewrite /collapse map_app_node set_app_node /=.
+case: (xl (fl r))=>/= ?; f_equal; apply: eq_rnode=>q.
+by case: (xr (fl q)).
 Qed.
 
 Lemma dig_comon {X}: @dig X; dup = dup; tns_fun dig dig.
 Proof.
-move=>/=; f_equal.
-apply: functional_extensionality=>[[??]]; apply functional_extensionality=>?.
-do!case: relP=>//=.
-by rewrite /C_member /=; case: (WC_member X).
+rewrite /= pair_equal_spec; split=>//.
+apply: functional_extensionality=>[[fl fr]]/=.
+apply: eq_rnode=>r; rewrite /collapse concat_app_node /=.
+case: (fl r)=>? /=; f_equal; apply: eq_rnode=>q.
+by case: (fr q).
 Qed.
 
-Lemma dup_mon_comm {P Q R S} : ⊢ (!P ⊗ !Q) ⊗ (!R ⊗ !S) ⊸ (!P ⊗ !R) ⊗ (!Q ⊗ !S).
+Definition dup_mon_comm {P Q R S} : ⊢ (P ⊗ Q) ⊗ (R ⊗ S) ⊸ (P ⊗ R) ⊗ (Q ⊗ S).
 Proof.
 split=>/=.
 - by move=>[[??][??]].
-move=>[hl hr]; split; move=>[??]; split=>??.
-- by case: hl=>// +?; apply.
-- by case: hr=>// +?; apply.
-- by case: hl=>// ?; apply.
-by case: hr=>// ?; apply.
+by move=>[zl zr]; split; move=>[??]; (split=>?; [case: zl| case: zr]=>//);
+[move=>+?|move=>+?|move=>?|move=>?]; apply.
 Defined.
 
-Definition undual {X}: ⊢ ((X ⊸ [false]) ⊸ [false]) ⊸ X.
-Proof. by split=>//= [[? g]]; case: g. Defined.
-
-Lemma Valid_undual {X}: Valid (@undual X).
+Lemma dup_mon {X Y}:
+  @bng_mon X Y; dup = tns_fun dup dup; dup_mon_comm; tns_fun bng_mon bng_mon.
 Proof.
-split=>/= [[[? fr]?]].
-case: (fr daimon)=>??[H1 ?]; apply: H1.
-by split=>//; case.
+rewrite /= pair_equal_spec; split=>//.
+- by apply: functional_extensionality=>[[]].
+apply: functional_extensionality=>[[fl fr]]/=.
+rewrite pair_equal_spec; split=>//;
+apply: functional_extensionality=>u; apply: eq_rnode=>v;
+rewrite /collapse map_app_node set_app_node /=.
+- case: (fl (u,v))=>? /=; f_equal; apply: eq_rnode=>w.
+  by case: (fr (u,w)).
+case: (fl (v,u))=>? /=; f_equal; apply: eq_rnode=>w.
+by case: (fr (w,u)).
 Qed.
-
-Definition wkn {A} : ⊢ A ⊸ [true].
-Proof. by split=>//= ?; apply: C_member. Defined.
-
-Lemma Valid_wkn {A}: Valid (@wkn A).
-Proof. by split=>/= [[??]][]. Qed.
-
-Definition absurd {X} : ⊢ [false] ⊸ X.
-Proof. by split=>//= _; apply: W_member. Defined.
-
-Lemma Valid_absurd {X}: Valid (@absurd X).
-Proof. by split=>/= [[[] ?]][]. Qed.
 
 Definition forall_intro {ty : Inhabited} (A : prp) (B : ty -> prp) :
   (forall x : ty, ⊢ A ⊸ B x) -> ⊢ A ⊸ ∀ x : ty, B x.
@@ -553,7 +739,7 @@ Proof. by split=>/= [[??]][?]; apply. Qed.
 
 Definition exists_elim {ty : Inhabited} (A : prp) (B : ty -> prp)
                        (f : forall x : ty, ⊢ B x ⊸ A) :
- ⊢ (∃ x : ty, B x) ⊸ A.
+  ⊢ (∃ x : ty, B x) ⊸ A.
 Proof.
 split=>/=.
 - by move=>[x ?]; move: (f x)=>/= [+?]; apply.
@@ -580,7 +766,7 @@ Definition Exists_elim {ty : Inhabited} (A : prp) (B : ty -> prp)
 Proof.
 split=>/=.
 - by move=>[x ?]; move: (f x)=>/=[+?]; apply.
-by move=>? x ?; move: (f x)=>/=[?]; apply.
+by move=>? x; move: (f x)=>/=[?]; apply.
 Defined.
 
 Lemma Valid_Exists_elim {ty A B f}:
@@ -589,7 +775,5 @@ Proof.
 move=>Hf; split=>/= [[[x v] u]]; move: (Hf x)=>[].
 move: (f x)=>/=[??] H [??].
 apply: (H (v,u)); split=>//.
-by apply: rel_not_not.
+by apply: rel_bng_not_not.
 Qed.
-
-End LinDia.
