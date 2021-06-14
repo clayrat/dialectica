@@ -144,16 +144,16 @@ Lemma rel_bng_cons {A R} : forall (u : W A) (x : C A) (z : Rlist (W A) (C A)),
   rel_bng_node R u (Rlist.rcons x z) = (R A u x /\ rel_bng R u z).
 Proof. by []. Qed.
 
-Lemma rel_bng_app {A R} : forall (u : W A) (zl zr : Rlist (W A) (C A)),
-  rel_bng R u (Rlist.app zl zr) <-> rel_bng R u zl /\ rel_bng R u zr
+Lemma rel_bng_cat {A R} : forall (u : W A) (zl zr : Rlist (W A) (C A)),
+  rel_bng R u (cat zl zr) <-> rel_bng R u zl /\ rel_bng R u zr
 with rel_bng_app_node {A R} : forall (u : W A) (nl : Rnode (W A) (C A)) (zr : Rlist (W A) (C A)),
-  rel_bng_node R u (Rlist.app_node nl zr u) <-> rel_bng_node R u nl /\ rel_bng R u zr.
+  rel_bng_node R u (cat_node nl zr u) <-> rel_bng_node R u nl /\ rel_bng R u zr.
 Proof.
 - move=>/= ?[?]?.
   by rewrite !rel_bng_simpl; exact: rel_bng_app_node.
 move=>u; case=>/=.
 - by case=>r; rewrite rel_bng_nil rel_bng_simpl; split=>// [[]].
-move=>???; rewrite !rel_bng_cons rel_bng_app.
+move=>???; rewrite !rel_bng_cons rel_bng_cat.
 by apply: iff_sym; exact: and_assoc.
 Qed.
 
@@ -242,20 +242,20 @@ Qed.
 
 (** Of course, a decidable proposition is stable for double negation. *)
 
-Lemma rel_not_not (A : prp) (u : W A) (x : C A) : ~ ~ rel u x -> rel u x.
+Lemma rel_not_not {A} (u : W A) (x : C A) : ~ ~ rel u x -> rel u x.
 Proof. by move/classicP=>H; apply/relP/H => /relP. Qed.
 
-Lemma rel_bng_not_not (A : prp) (u : W A) (v : Rlist (W A) (C A)) : ~ ~ rel_bng rel u v -> rel_bng rel u v.
+Lemma rel_bng_not_not {A} (u : W A) (v : Rlist (W A) (C A)) : ~ ~ rel_bng rel u v -> rel_bng rel u v.
 Proof.
 pose R:=relP u.
 move/classicP=>H.
 by apply: relbngP=>//; apply: H=>/relbngP; apply.
 Qed.
 
-Lemma rel_arr : forall A B (w : W (A ⊸ B)) (z : C (A ⊸ B)),
+Lemma rel_arr {A B}: forall (w : W (A ⊸ B)) (z : C (A ⊸ B)),
   (rel w z) <-> (rel z.1 (w.2 z.2) -> rel (w.1 z.1) z.2).
 Proof.
-move=>?? /= [??][??]; split=>/= H.
+move=>/= [??][??]; split=>/= H.
 - by move=>?; apply: rel_not_not=>?; apply: H.
 by move=>[?]; apply; apply: H.
 Qed.
@@ -545,7 +545,7 @@ Qed.
 Definition der {X} : ⊢ !X ⊸ X.
 Proof.
 split=>//= x.
-by exact: (rnode (fun _ => rcons x nil)).
+by exact: (lift x).
 Defined.
 
 Lemma Valid_der {X} : Valid (@der X).
@@ -574,7 +574,7 @@ case: (n u)=>/=.
 - rewrite rel_bng_nil=>H; split=>//.
   case: z H=>? /=; rewrite rel_bng_simpl.
   by exact: relnode_concat.
-move=>??; rewrite !rel_bng_cons=>[[?]] /rel_bng_app [??]; do!split=>//.
+move=>??; rewrite !rel_bng_cons=>[[?]] /rel_bng_cat [??]; do!split=>//.
 by apply: rel_concat.
 Qed.
 
@@ -596,25 +596,14 @@ Lemma dig_der_id_1 {X}: @dig X; der = identity.
 Proof.
 rewrite /= pair_equal_spec; split=>//.
 apply: functional_extensionality=>[[?]] /=.
-by under eq_rnode=>? do rewrite app_id_r_node.
-Qed.
-
-Lemma concat_singl {X} (u : Rlist (W X) (C X)) :
-  concat (map (fun x => rnode (fun => rcons x nil)) u) = u
-with concat_singl_node {X} (v : Rnode (W X) (C X)) (u : W X) :
-  concat_node (map_node (fun x => rnode (fun => rcons x nil)) v) u = v.
-Proof.
-- case: u=>? /=.
-  by under eq_rnode=>? do rewrite concat_singl_node.
-case: v=>//= ? r /=; rewrite concat_singl.
-by case: r.
+by under eq_rnode=>? do rewrite cat_id_r_node.
 Qed.
 
 Lemma dig_der_id_2 {X}: @dig X; bng_fun der = identity.
 Proof.
 rewrite /= pair_equal_spec; split=>//.
 apply: functional_extensionality=>l.
-by rewrite set_id; apply: concat_singl.
+by rewrite set_id; apply: concat_lift.
 Qed.
 
 Lemma dig_assoc {X}: @dig X; dig = dig; bng_fun dig.
@@ -652,7 +641,7 @@ Proof. by move=>/=[]. Qed.
 Definition dup {X} : ⊢ !X ⊸ !X ⊗ !X.
 Proof.
 split=>//= [[xl xr]].
-by exact: (Rlist.app (collapse xl) (collapse xr)).
+by exact: (cat (collapse xl) (collapse xr)).
 Defined.
 
 Lemma Valid_dup {X} : Valid (@dup X).
@@ -668,7 +657,7 @@ Lemma natural_dup {X Y}: forall (f : ⊢ X ⊸ Y),
 Proof.
 move=>/=[fl fr]/=; rewrite pair_equal_spec; split=>//.
 apply: functional_extensionality=>[[xl xr]] /=; apply: eq_rnode=>r.
-rewrite /collapse map_app_node set_app_node /=.
+rewrite /collapse map_cat_node set_cat_node /=.
 case: (xl (fl r))=>/= ?; f_equal; apply: eq_rnode=>q.
 by case: (xr (fl q)).
 Qed.
@@ -677,7 +666,7 @@ Lemma dig_comon {X}: @dig X; dup = dup; tns_fun dig dig.
 Proof.
 rewrite /= pair_equal_spec; split=>//.
 apply: functional_extensionality=>[[fl fr]]/=.
-apply: eq_rnode=>r; rewrite /collapse concat_app_node /=.
+apply: eq_rnode=>r; rewrite /collapse concat_cat_node /=.
 case: (fl r)=>? /=; f_equal; apply: eq_rnode=>q.
 by case: (fr q).
 Qed.
@@ -698,7 +687,7 @@ rewrite /= pair_equal_spec; split=>//.
 apply: functional_extensionality=>[[fl fr]]/=.
 rewrite pair_equal_spec; split=>//;
 apply: functional_extensionality=>u; apply: eq_rnode=>v;
-rewrite /collapse map_app_node set_app_node /=.
+rewrite /collapse map_cat_node set_cat_node /=.
 - case: (fl (u,v))=>? /=; f_equal; apply: eq_rnode=>w.
   by case: (fr (u,w)).
 case: (fl (v,u))=>? /=; f_equal; apply: eq_rnode=>w.

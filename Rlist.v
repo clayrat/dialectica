@@ -1,4 +1,4 @@
-From Coq Require Import ssreflect FunctionalExtensionality.
+From Coq Require Import ssreflect ssrfun FunctionalExtensionality.
 From mathcomp Require Import seq.
 
 Set Bullet Behavior "None".
@@ -27,7 +27,7 @@ Definition nil {R A} : Rlist R A := rnode (fun _ => rnil).
 Definition cons {R A} (x : R -> A) (l : Rlist R A) : Rlist R A :=
   rnode (fun r => rcons (x r) l).
 
-Definition lift {R A} (x : A) := @rnode R A (fun _ => rcons x (rnode (fun _ => rnil))).
+Definition lift {R A} (x : A) := @rnode R A (fun _ => rcons x nil).
 
 Fixpoint run {R A} (l : Rlist R A) (r : R) : seq A :=
   let: rnode n := l in
@@ -39,37 +39,37 @@ match n with
 | rcons x l => x :: run l r
 end.
 
-Fixpoint app {R A} (l1 l2 : Rlist R A) : Rlist R A :=
+Fixpoint cat {R A} (l1 l2 : Rlist R A) : Rlist R A :=
   let: rnode n := l1 in
-  rnode (fun r => app_node (n r) l2 r)
+  rnode (fun r => cat_node (n r) l2 r)
 
-with app_node {R A} (n : Rnode R A) (l2 : Rlist R A) : R -> Rnode R A :=
+with cat_node {R A} (n : Rnode R A) (l2 : Rlist R A) : R -> Rnode R A :=
 match n with
-| rnil => fun r => match l2 with rnode n => n r end
-| rcons x l1 => fun r => rcons x (app l1 l2)
+| rnil => let: rnode n := l2 in n
+| rcons x l1 => fun _ => rcons x (cat l1 l2)
 end.
 
-Lemma app_id_r {R A} : forall l : Rlist R A,
-  app l nil = l
-with app_id_r_node {R A} : forall (n : Rnode R A) r,
-  app_node n nil r = n.
+Lemma cat_id_r {R A} : forall l : Rlist R A,
+  cat l nil = l
+with cat_id_r_node {R A} : forall (n : Rnode R A) r,
+  cat_node n nil r = n.
 Proof.
-- by case=>?/=; under eq_rnode=>? do rewrite app_id_r_node.
-by case=>//= ???; rewrite app_id_r.
+- by case=>?/=; under eq_rnode=>? do rewrite cat_id_r_node.
+by case=>//= ???; rewrite cat_id_r.
 Qed.
 
-Lemma app_id_l {R A} : forall l : Rlist R A,
-  app nil l = l.
+Lemma cat_id_l {R A} : forall l : Rlist R A,
+  cat nil l = l.
 Proof. by case. Qed.
 
-Lemma app_assoc {R A} : forall l1 l2 l3 : Rlist R A,
-  app l1 (app l2 l3) = app (app l1 l2) l3
-with app_assoc_node {R A} : forall (n1 : Rnode R A) (l2 l3 : Rlist R A) r,
-  app_node n1 (app l2 l3) r = app_node (app_node n1 l2 r) l3 r.
+Lemma cat_assoc {R A} : forall l1 l2 l3 : Rlist R A,
+  cat l1 (cat l2 l3) = cat (cat l1 l2) l3
+with cat_assoc_node {R A} : forall (n1 : Rnode R A) (l2 l3 : Rlist R A) r,
+  cat_node n1 (cat l2 l3) r = cat_node (cat_node n1 l2 r) l3 r.
 Proof.
-- by case=>???/=; under eq_rnode=>? do rewrite app_assoc_node.
+- by case=>???/=; under eq_rnode=>? do rewrite cat_assoc_node.
 case=>/=; first by case.
-by move=>?????; rewrite app_assoc.
+by move=>?????; rewrite cat_assoc.
 Qed.
 
 Fixpoint map {R A B} (f : A -> B) (l : Rlist R A) : Rlist R B :=
@@ -81,20 +81,20 @@ match n with
 | rcons x l => rcons (f x) (map f l)
 end.
 
-Lemma map_app {R A B}: forall (f : A -> B) (l1 l2 : Rlist R A),
-  map f (app l1 l2) = app (map f l1) (map f l2)
-with map_app_node {R A B}: forall (f : A -> B) (n1 : Rnode R A) l2 r,
-  map_node f (app_node n1 l2 r) = app_node (map_node f n1) (map f l2) r.
+Lemma map_cat {R A B}: forall (f : A -> B) (l1 l2 : Rlist R A),
+  map f (cat l1 l2) = cat (map f l1) (map f l2)
+with map_cat_node {R A B}: forall (f : A -> B) (n1 : Rnode R A) l2 r,
+  map_node f (cat_node n1 l2 r) = cat_node (map_node f n1) (map f l2) r.
 Proof.
-- by move=>?[?]?/=; under eq_rnode=>? do rewrite map_app_node.
+- by move=>?[?]?/=; under eq_rnode=>? do rewrite map_cat_node.
 move=>?; case=>/=; first by case.
-by move=>????; rewrite map_app.
+by move=>????; rewrite map_cat.
 Qed.
 
 Lemma map_map {R A B C} : forall (f : A -> B) (g : B -> C) (l : Rlist R A),
-  map g (map f l) = map (fun x => g (f x)) l
+  map g (map f l) = map (g \o f) l
 with map_map_node {R A B C} : forall (f : A -> B) (g : B -> C) (n : Rnode R A),
-  map_node g (map_node f n) = map_node (fun x => g (f x)) n.
+  map_node g (map_node f n) = map_node (g \o f) n.
 Proof.
 - by move=>??[?]/=; under eq_rnode=>? do rewrite map_map_node.
 move=>??; case=>//=??.
@@ -117,14 +117,14 @@ match n with
 | rcons x l => rcons x (set g l)
 end.
 
-Lemma set_app {R S A} : forall (g : S -> R) (l1 l2 : Rlist R A),
-  set g (app l1 l2) = app (set g l1) (set g l2)
-with set_app_node {R S A} : forall (g : S -> R) (n1 : Rnode R A) l2 r,
-  set_node g (app_node n1 l2 (g r)) = app_node (set_node g n1) (set g l2) r.
+Lemma set_cat {R S A} : forall (g : S -> R) (l1 l2 : Rlist R A),
+  set g (cat l1 l2) = cat (set g l1) (set g l2)
+with set_cat_node {R S A} : forall (g : S -> R) (n1 : Rnode R A) l2 r,
+  set_node g (cat_node n1 l2 (g r)) = cat_node (set_node g n1) (set g l2) r.
 Proof.
-- by move=>?[?]?/=; under eq_rnode=>? do rewrite set_app_node.
+- by move=>?[?]?/=; under eq_rnode=>? do rewrite set_cat_node.
 move=>?; case=>/=; first by case.
-by move=>????; rewrite set_app.
+by move=>????; rewrite set_cat.
 Qed.
 
 Lemma map_set {R S A B} : forall (f : A -> B) (g : S -> R) l,
@@ -138,9 +138,9 @@ by rewrite map_set.
 Qed.
 
 Lemma set_set {R S T A} : forall (f : S -> R) (g : T -> S) (l : Rlist R A),
-  set g (set f l) = set (fun r => f (g r)) l
+  set g (set f l) = set (f \o g) l
 with set_set_node {R S T A} : forall (f : S -> R) (g : T -> S) (n : Rnode R A),
-  set_node g (set_node f n) = set_node (fun r => f (g r)) n.
+  set_node g (set_node f n) = set_node (f \o g) n.
 Proof.
 - by move=>??[?]/=; under eq_rnode=>? do rewrite set_set_node.
 move=>??; case=>//=??.
@@ -161,17 +161,17 @@ Fixpoint concat {R A} (l : Rlist R (Rlist R A)) : Rlist R A :=
 with concat_node {R A} (n : Rnode R (Rlist R A)) : R -> Rnode R A :=
 match n with
 | rnil => fun _ => rnil
-| rcons x l => fun r => let: rnode n := app x (concat l) in n r
+| rcons x l => fun r => let: rnode n := cat x (concat l) in n r
 end.
 
-Lemma concat_app {R A} : forall l1 l2 : Rlist R (Rlist R A),
-  concat (app l1 l2) = app (concat l1) (concat l2)
-with concat_app_node {R A} : forall (n1 : Rnode R (Rlist R A)) l2 r,
-  concat_node (app_node n1 l2 r) r = app_node (concat_node n1 r) (concat l2) r.
+Lemma concat_cat {R A} : forall l1 l2 : Rlist R (Rlist R A),
+  concat (cat l1 l2) = cat (concat l1) (concat l2)
+with concat_cat_node {R A} : forall (n1 : Rnode R (Rlist R A)) l2 r,
+  concat_node (cat_node n1 l2 r) r = cat_node (concat_node n1 r) (concat l2) r.
 Proof.
-- by case=>/=??; under eq_rnode=>? do rewrite concat_app_node.
-case=>/=; case=>? // ???; rewrite concat_app /=.
-by exact: app_assoc_node.
+- by case=>/=??; under eq_rnode=>? do rewrite concat_cat_node.
+case=>/=; case=>? // ???; rewrite concat_cat /=.
+by exact: cat_assoc_node.
 Qed.
 
 Lemma concat_map {R A} : forall l : Rlist R (Rlist R (Rlist R A)),
@@ -182,7 +182,7 @@ Proof.
 - by case=>?/=; under eq_rnode=>? do rewrite concat_map_node.
 case=>//=; case=>???.
 rewrite -concat_map /=.
-by exact: concat_app_node.
+by exact: concat_cat_node.
 Qed.
 
 Lemma map_concat {R A B} : forall (f : A -> B) (l : Rlist R (Rlist R A)),
@@ -192,7 +192,7 @@ with map_concat_node {R A B} : forall (f : A -> B) (n : Rnode R (Rlist R A)) r,
 Proof.
 - by move=>?[?]/=; under eq_rnode=>? do rewrite map_concat_node.
 move=>?; case=>//=; case=>???/=.
-by rewrite map_app_node map_concat.
+by rewrite map_cat_node map_concat.
 Qed.
 
 Lemma set_concat {R S A} : forall (g : S -> R) (l : Rlist R (Rlist R A)),
@@ -202,14 +202,23 @@ with set_concat_node {R S A} : forall (g : S -> R) (n : Rnode R (Rlist R A)) r,
 Proof.
 - by move=>?[?]/=; under eq_rnode=>? do rewrite set_concat_node.
 move=>?; case=>//=; case=>???/=.
-by rewrite set_app_node set_concat.
+by rewrite set_cat_node set_concat.
+Qed.
+
+Lemma concat_lift {R A} : forall (u : Rlist R A), concat (map lift u) = u
+with concat_lift_node {R A} : forall (v : Rnode R A) (u : R), concat_node (map_node lift v) u = v.
+Proof.
+- case=>? /=.
+  by under eq_rnode=>? do rewrite concat_lift_node.
+case=>//= ? r /=; rewrite concat_lift.
+by case: r.
 Qed.
 
 Definition collapse {R A} (f : R -> Rlist R A) : Rlist R A :=
   rnode (fun r => let: rnode n := f r in n r).
 
-Lemma collapse_app {R A} : forall f g : R -> Rlist R A,
-  collapse (fun r => app (f r) (collapse g)) = app (collapse f) (collapse g).
+Lemma collapse_cat {R A} : forall f g : R -> Rlist R A,
+  collapse (fun r => cat (f r) (collapse g)) = cat (collapse f) (collapse g).
 Proof.
 move=>f ?; rewrite /collapse /=.
 by apply: eq_rnode=>?; case: (f _).
