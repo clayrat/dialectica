@@ -693,6 +693,8 @@ case: (fl (v,u))=>? /=; f_equal; apply: eq_rnode=>w /=.
 by case: (fr (w,u)).
 Qed.
 
+(** Quantifiers *)
+
 Definition forall_intro {ty : Inhabited} (A : prp) (B : ty -> prp) :
   (forall x : ty, ⊢ A ⊸ B x) -> ⊢ A ⊸ ∀ x : ty, B x.
 Proof.
