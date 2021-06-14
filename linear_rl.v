@@ -160,22 +160,21 @@ Qed.
 Fixpoint rel (A : prp) : W A -> C A -> Prop :=
   match A return W A -> C A -> Prop with
     | atm p => fun _ _ => p
-    | pls A B => fun w z => match w with
+    | pls X Y => fun w z => match w with
                  | inl u => rel u z.1
                  | inr v => rel v z.2
                  end
-    | tns A B => fun w z => match w, z with
+    | tns X Y => fun w z => match w, z with
                  | (u, v), (zl, zr) => rel u (zr v) /\ rel v (zl u)
                  end
-    | bng A => @rel_bng A rel
-    | opp A => (fun x u => ~ rel u x)
-    | unv T A => fun w z => match z with
+    | bng X => @rel_bng X rel
+    | opp X => fun x u => ~ rel u x
+    | unv T X => fun w z => match z with
                  | existT t u => rel (w t) u
                  end
   end.
 
-(** The [rel] relation is decidable. This fact is used only in the adjunction between
-   conjunction and implication. *)
+(** The [rel] relation is decidable. *)
 
 Definition relb_bng {A} (R : forall x, W x -> C x -> bool) (u : W A) (z : Rlist (W A) (C A)) :=
   Rlist.fold_right (fun x P u => R A u x && P u) (fun _ => true) z u.
@@ -198,16 +197,16 @@ Proof. by []. Qed.
 Fixpoint relb (A : prp) : W A -> C A -> bool :=
   match A return W A -> C A -> bool with
     | atm p => fun _ _ => p
-    | pls A B => fun w z => match w with
+    | pls X Y => fun w z => match w with
                  | inl u => relb u z.1
                  | inr v => relb v z.2
                  end
-    | tns A B => fun w z => match w, z with
+    | tns X Y => fun w z => match w, z with
                  | (u, v), (zl, zr) => relb u (zr v) && relb v (zl u)
                  end
-    | bng A => @relb_bng A relb
-    | opp A => fun x u => ~~ relb u x
-    | unv T A => fun w z => match z with
+    | bng X => @relb_bng X relb
+    | opp X => fun x u => ~~ relb u x
+    | unv T X => fun w z => match z with
                  | existT t u => relb (w t) u
                  end
   end.
@@ -253,7 +252,7 @@ by apply: relbngP=>//; apply: H=>/relbngP; apply.
 Qed.
 
 Lemma rel_arr {A B}: forall (w : W (A ⊸ B)) (z : C (A ⊸ B)),
-  (rel w z) <-> (rel z.1 (w.2 z.2) -> rel (w.1 z.1) z.2).
+  rel w z <-> (rel z.1 (w.2 z.2) -> rel (w.1 z.1) z.2).
 Proof.
 move=>/= [??][??]; split=>/= H.
 - by move=>?; apply: rel_not_not=>?; apply: H.
@@ -353,7 +352,7 @@ move=>?; split=>//.
 by move=>_; exact: (ctx_intro [::]).
 Defined.
 
-Lemma Valid_idl {A}: Valid (@idl A).
+Lemma Valid_idl {X}: Valid (@idl X).
 Proof. by split=>/=[[[[]??]]][[]]. Qed.
 
 (** *)
@@ -438,15 +437,15 @@ by move=>?; apply/(Rlist.set fl)/(Rlist.map fr).
 Defined.
 
 Lemma rel_set_map {X Y} (fl : W X -> W Y) (fr : C Y -> C X) (u : W X) (g : Rlist (W Y) (C Y)) :
-  (forall c : C (X ⊸ Y), @rel (X ⊸ Y) (fl, fr) c) ->
+  (forall c : C (X ⊸ Y), @rel (X ⊸ Y) (fl,fr) c) ->
   rel_bng rel u (set fl (map fr g)) ->
   rel_bng rel (fl u) g
 with relnode_set_map {X Y} (fl : W X -> W Y) (fr : C Y -> C X) (u : W X) (g : Rnode (W Y) (C Y)) :
-  (forall c : C (X ⊸ Y), @rel (X ⊸ Y) (fl, fr) c) ->
+  (forall c : C (X ⊸ Y), @rel (X ⊸ Y) (fl,fr) c) ->
   rel_bng_node rel u (set_node fl (map_node fr g)) ->
   rel_bng_node rel (fl u) g.
 Proof.
-- move=>?; case: g =>?/=; rewrite !rel_bng_simpl.
+- move=>?; case: g=>?/=; rewrite !rel_bng_simpl /=.
   by exact: relnode_set_map.
 move=>H; case: g=>/=; first by rewrite !rel_bng_nil.
 move=>x ?; rewrite !rel_bng_cons =>[[??]]; split.
@@ -657,8 +656,8 @@ Lemma natural_dup {X Y}: forall (f : ⊢ X ⊸ Y),
 Proof.
 move=>/=[fl fr]/=; rewrite pair_equal_spec; split=>//.
 apply: functional_extensionality=>[[xl xr]] /=; apply: eq_rnode=>r.
-rewrite /collapse map_cat_node set_cat_node /=.
-case: (xl (fl r))=>/= ?; f_equal; apply: eq_rnode=>q.
+rewrite /collapse /= map_cat_node set_cat_node /=.
+case: (xl (fl r))=>/= ?; f_equal; apply: eq_rnode=>q /=.
 by case: (xr (fl q)).
 Qed.
 
@@ -687,10 +686,10 @@ rewrite /= pair_equal_spec; split=>//.
 apply: functional_extensionality=>[[fl fr]]/=.
 rewrite pair_equal_spec; split=>//;
 apply: functional_extensionality=>u; apply: eq_rnode=>v;
-rewrite /collapse map_cat_node set_cat_node /=.
-- case: (fl (u,v))=>? /=; f_equal; apply: eq_rnode=>w.
+rewrite /collapse /= map_cat_node set_cat_node /=.
+- case: (fl (u,v))=>? /=; f_equal; apply: eq_rnode=>w /=.
   by case: (fr (u,w)).
-case: (fl (v,u))=>? /=; f_equal; apply: eq_rnode=>w.
+case: (fl (v,u))=>? /=; f_equal; apply: eq_rnode=>w /=.
 by case: (fr (w,u)).
 Qed.
 

@@ -149,8 +149,7 @@ Fixpoint rel (A : prp) : W A -> C A -> Prop :=
                  end
   end.
 
-(** The [rel] relation is decidable. This fact is used only in the adjunction between
-   conjunction and implication. *)
+(** The [rel] relation is decidable. *)
 
 Fixpoint relb (A : prp) : W A -> C A -> bool :=
   match A return W A -> C A -> bool with
@@ -186,7 +185,7 @@ Lemma rel_not_not (A : prp) (u : W A) (x : C A) : ~ ~ rel u x -> rel u x.
 Proof. by move/classicP=>H; apply/relP/H => /relP. Qed.
 
 Lemma rel_arr : forall A B (w : W (A ⊸ B)) (z : C (A ⊸ B)),
-  (rel w z) <-> (rel z.1 (w.2 z.2) -> rel (w.1 z.1) z.2).
+  rel w z <-> (rel z.1 (w.2 z.2) -> rel (w.1 z.1) z.2).
 Proof.
 move=>?? /= [??][??]; split=>/= H.
 - by move=>?; apply: rel_not_not=>?; apply: H.
