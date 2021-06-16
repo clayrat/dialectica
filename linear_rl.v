@@ -144,6 +144,18 @@ Lemma rel_bng_cons {A R} : forall (u : W A) (x : C A) (z : Rlist (W A) (C A)),
   rel_bng_node R u (Rlist.rcons x z) = (R A u x /\ rel_bng R u z).
 Proof. by []. Qed.
 
+Lemma rel_bng_inv {A} {R : forall x, W x -> C x -> Prop} : forall (u : W A) (z : Rlist (W A) (C A)),
+  (forall v : C A, @R (opp (opp A)) u v -> @R A u v) -> @rel_bng (opp (opp A)) R u z -> rel_bng R u z
+with rel_bng_node_inv {A} {R : forall x, W x -> C x -> Prop} : forall (u : W A) (z : Rnode (W A) (C A)),
+  (forall v : C A, @R (opp (opp A)) u v -> @R A u v) -> @rel_bng_node (opp (opp A)) R u z -> rel_bng_node R u z.
+Proof.
+- by move=>?[?]; apply: rel_bng_node_inv.
+move=>?; case.
+- by rewrite !rel_bng_nil.
+move=>?? H.
+by rewrite !rel_bng_cons; case=>??; split; [apply: H | apply: rel_bng_inv].
+Qed.
+
 Lemma rel_bng_cat {A R} : forall (u : W A) (zl zr : Rlist (W A) (C A)),
   rel_bng R u (cat zl zr) <-> rel_bng R u zl /\ rel_bng R u zr
 with rel_bng_app_node {A R} : forall (u : W A) (nl : Rnode (W A) (C A)) (zr : Rlist (W A) (C A)),
@@ -429,6 +441,16 @@ Lemma Valid_projr {X Y}: Valid (@projr X Y).
 Proof. by split=>/=[[[??]?]][]. Qed.
 
 (** Exponentials *)
+
+Definition whn_opp {X}: ⊢ ¬!X ⊸ ?(¬X).
+Proof. by []. Defined.
+
+Lemma Valid_whn_opp {X}: Valid (@whn_opp X).
+Proof.
+split=>/=[[??]][H]; apply=>?; apply: H.
+apply: rel_bng_inv=>//= ?.
+by apply: rel_bng_not_not.
+Qed.
 
 Definition bng_fun {X Y}: ⊢ X ⊸ Y -> ⊢ !X ⊸ !Y.
 Proof.
