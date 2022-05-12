@@ -400,33 +400,19 @@ Proof. by rewrite /valid /=; case=>_ H; move/eqP: (H tt)=>->. Qed.
 
    We need UIP (Uniqueness of Identity Proofs) for natural numbers here. *)
 
-Lemma eqN_decidable (m n : nat) : decidable (m = n).
-Proof.
-  revert m n.
-  induction m; induction n; [left|right|right|]; auto.
-  destruct (IHm n) as [E1 | E2].
-  rewrite E1.
-  left; reflexivity.
-  right; injection; auto.
-Qed.
+Definition eqN_decidable (m n : nat) : decidable (m = n) := decP (@eqP _ m n).
 
-Definition W_transfer (p : nat -> prp) (m n : nat) : W (p m) -> W (p n).
-Proof.
-  intros w.
-  destruct (eqN_decidable m n) as [E1 | E2].
-  rewrite <- E1.
-  exact w.
-  exact (W_member ((p n))).
-Defined.
+Definition W_transfer (p : nat -> prp) (m n : nat) : W (p m) -> W (p n) :=
+  fun w => match eqN_decidable m n with
+  | left eq => eq_rect m (fun k => W (p k)) w n eq
+  | right _ => W_member (p n)
+  end.
 
-Definition C_transfer (p : nat -> prp) (m n : nat) : C (p m) -> C (p n).
-Proof.
-  intros c.
-  destruct (eqN_decidable m n) as [E1 | E2].
-  rewrite <- E1.
-  exact c.
-  exact (C_member ((p n))).
-Defined.
+Definition C_transfer (p : nat -> prp) (m n : nat) : C (p m) -> C (p n) :=
+  fun c => match eqN_decidable m n with
+  | left eq => eq_rect m (fun k => C (p k)) c n eq
+  | right _ => C_member (p n)
+  end.
 
 (** Finally, the validity of Leibniz's law is proved. If someone knows a shortcut,
     I would like to know about it. *)
@@ -438,7 +424,7 @@ exists (fun _ => (fun w => @W_transfer _ _ _ w,
                   fun y => @C_transfer _ _ _ y.2),
         fun _ => tt)=>/=.
 move=>[[] [??]] /=; rewrite /C_transfer /W_transfer.
-move=>/eqP E; destruct E.
+move/eqP=>E; destruct E.
 case: (eqN_decidable m m)=> // E1.
 by rewrite (UIP_dec eqN_decidable E1 (refl_equal m)).
 Qed.
