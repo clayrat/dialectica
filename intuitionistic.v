@@ -39,7 +39,7 @@ Definition N := inhabit 0.
     the usual Dialectica interpretation. *)
 
 Inductive prp : Type :=
-  | primitive : forall p : bool, prp
+  | primitive : bool -> prp
   | conjunction : prp -> prp -> prp
   | disjunction : prp -> prp -> prp
   | implication : prp -> prp -> prp

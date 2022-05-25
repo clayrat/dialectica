@@ -31,7 +31,7 @@ Definition N := inhabit 0.
    the usual Dialectica interpretation. *)
 
 Inductive prp : Type :=
-  | atm : forall p : bool, prp
+  | atm : bool -> prp
   | pls (A B : prp)
   | tns (A B : prp)
   | bng (A : prp)
