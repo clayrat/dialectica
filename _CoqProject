@@ -1,5 +1,5 @@
 -R . Dialectica
-intuitionistic.v
-linear.v
-Rlist.v
-linear_rl.v
+theories/intuitionistic.v
+theories/linear.v
+theories/Rlist.v
+theories/linear_rl.v
