@@ -295,9 +295,9 @@ exists (fun x => (a x.1).1 x.2,
           if diab wq ((a wp).2 (wq, cr))
           then inl (b (wp, (wq, cr)))
           else inr ((a wp).2 (wq, cr)))=>/=.
-move=>[[??]?].
+move=>[[wp wq] cr] /=.
 case: (diaP _ ((a _).2 _))=>//= ??.
-by apply: (H (_,(_,_))).
+by apply: (H (wp,(wq,cr))).
 Qed.
 
 Theorem impl_conj_adjunct2 (p q r : prp) : valid (p and q ==>> r) -> valid (p ==>> (q ==>> r)).
