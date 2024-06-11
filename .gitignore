@@ -33,3 +33,8 @@ lia.cache
 nia.cache
 nlia.cache
 nra.cache
+
+Everything.agda
+*.agda~
+*.agda#
+_build
