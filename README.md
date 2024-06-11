@@ -6,3 +6,4 @@ Various existing developments updated and ported to Coq+SSreflect / Cubical Agda
 * https://github.com/ppedrot/vitef/tree/master/dialectica
 * [Pedrot, [2014] "A Functional Functional Interpretation"](https://www.pédrot.fr/articles/lics2014.pdf)
 * https://cj-xu.github.io/agda/Dialectica/Dialectica.html
+* https://github.com/jeremie-koenig/diagames/
